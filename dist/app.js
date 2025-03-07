@@ -1,4 +1,5 @@
-import { newState, fmt_state, game } from "./factions.js";
+import { newState, fmt_state, game, BUILDING_NAMES, _upgrade_building, getTrueBuildingLvls, BUILDING_LV, BUILDING_COUNT, _new_building, canBuildNewBuilding } from "./factions.js";
+import { range } from "./utils.js";
 const cfg = {
     hq_exponents: [1.5, 1.5, 1.5],
     building_exponents: [1.5, 1.5, 1.5],
@@ -12,7 +13,12 @@ const worker = new Worker('../dist/factions.js', { type: 'module' });
 function Text(s) {
     return document.createTextNode(s);
 }
-function Button(text, onclick) {
+function Pre(s) {
+    const el = document.createElement('pre');
+    el.innerText = s;
+    return el;
+}
+function Button(text, onclick = () => { }) {
     const el = document.createElement('button');
     el.innerText = text;
     el.onclick = onclick;
@@ -38,6 +44,11 @@ function h2(s) {
     el.innerText = s;
     return el;
 }
+function h3(s) {
+    const el = document.createElement('h3');
+    el.innerText = s;
+    return el;
+}
 function p(s) {
     const el = document.createElement('p');
     el.innerText = s;
@@ -48,6 +59,7 @@ function Input(cfg) {
     Object.assign(el, cfg);
     return el;
 }
+// input
 let _flag = false;
 function create_inputs(container, key) {
     const div = document.createElement('div');
@@ -74,12 +86,53 @@ function create_inputs(container, key) {
     }
     container.appendChild(div);
 }
+// state builder
+const [HQ, WOODCUTTER, MINE, STORAGE, TRAINING_CENTER, BARRACKS, TAVERN, HOUSE, COMMAND_CENTER, GUARD_TOWER, TOWN_HALL, MERCENARY_OFFICE, ARENA, FURNACE, SAWMILL] = range(15);
+function state_builder() {
+    function BuildingDisplay(i) {
+        const el = Pre('bello');
+        return el;
+    }
+    function _render(b) {
+        _get_display(b).innerText = getTrueBuildingLvls(cfg.s0[BUILDING_COUNT.start + b], cfg.s0[BUILDING_LV.start + b]).join(' ');
+        range(N_BUILDINGS).forEach(b => _get_new_button(b).disabled = !canBuildNewBuilding(cfg.s0));
+        _get_upgrade_button(b).disabled = cfg.s0[BUILDING_COUNT.start + b] === 0;
+    }
+    function _up(b) {
+        _upgrade_building(cfg.s0, b);
+        _render(b);
+    }
+    function _new(b) {
+        _new_building(cfg.s0, b);
+        _render(b);
+    }
+    function _get_display(b) {
+        return grid_container.children[3 + b * 4];
+    }
+    function _get_upgrade_button(b) {
+        return grid_container.children[2 + b * 4];
+    }
+    function _get_new_button(b) {
+        return grid_container.children[1 + b * 4];
+    }
+    const grid_container = Div();
+    const N_BUILDINGS = 8;
+    grid_container.style.display = 'grid';
+    grid_container.style.gridTemplateColumns = 'repeat(4, min-content)';
+    grid_container.append(...BUILDING_NAMES.filter((_, i) => i < N_BUILDINGS).flatMap((name, i) => [Pre(name.padEnd(15)), Button('new', () => _new(i)), Button('upgrade', () => _up(i)), BuildingDisplay(i)]));
+    range(N_BUILDINGS).forEach(_render);
+    //@ts-ignore
+    grid_container.children[1].style.visibility = 'hidden';
+    return Div(h2('Starting Buildings'), grid_container);
+}
 const input_container = document.createElement('div');
 input_container.appendChild(h1('Input'));
+input_container.appendChild(state_builder());
 input_container.appendChild(h2('Game parameters'));
 Object.keys(cfg).filter(k => k !== 's0').map(k => create_inputs(input_container, k));
 const run_button = document.createElement('button');
 run_button.innerText = 'Run';
+run_button.id = 'run_button';
 run_button.onclick = () => {
     const msg = {
         type: 1 /* MessageType.CONFIGURE */,
@@ -121,7 +174,9 @@ worker.onmessage = ev => {
     output_div_more.innerText = `iter ${iter} ` + fmt_path(path);
 };
 // about
-const about_text = 'Monte Carlo Tree Search optimising for cumulative (wood + iron) produced. Will drain your battery. Author makes no claim that this tool is optimal, functional, or ethical';
+const about_text = `Monte Carlo Tree Search optimising for cumulative (wood + iron) produced.
+Will drain your battery.
+Author makes no claim that this tool is optimal, functional, or ethical.`;
 const about_p = p('[show]');
 about_p.onclick = ev => {
     about_p.innerText = about_p.innerText === '[show]' ? about_text + ' [hide]' : '[show]';

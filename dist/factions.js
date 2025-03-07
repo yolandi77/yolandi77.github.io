@@ -1,4 +1,4 @@
-export { newState, unpack_action, fmt_action, fmt_state, game };
+export { newState, unpack_action, fmt_action, fmt_state, game, BUILDING_NAMES, BUILDING_LV, BUILDING_COUNT, _upgrade_building, _new_building, getTrueBuildingLvls, canBuildNewBuilding };
 import { Mcts, MctsNode } from './mcts.js';
 import { random_choice, range } from './utils.js';
 const buildings = [{ "name": "HQ", "woodCost": 50, "ironCost": 50, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 10 }, { "name": "WoodCutter", "woodCost": 40, "ironCost": 0, "workerCost": 0.5, "woodStart": 1, "ironStart": 0, "workerStart": 8 }, { "name": "Mine", "woodCost": 40, "ironCost": 10, "workerCost": 0.5, "woodStart": 1, "ironStart": 2, "workerStart": 8 }, { "name": "Storage", "woodCost": 80, "ironCost": 20, "workerCost": 1, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Training Center", "woodCost": 100, "ironCost": 150, "workerCost": 8, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Barracks", "woodCost": 500, "ironCost": 500, "workerCost": 8, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Tavern", "woodCost": 150, "ironCost": 100, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "House", "woodCost": 500, "ironCost": 400, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Command Center", "woodCost": 500, "ironCost": 1000, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Guard Tower", "woodCost": 400, "ironCost": 900, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Town Hall", "woodCost": 1000, "ironCost": 600, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Mercenary Office", "woodCost": 400, "ironCost": 400, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Arena", "woodCost": 600, "ironCost": 1000, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Furnace", "woodCost": 150, "ironCost": 37, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Sawmill", "woodCost": 150, "ironCost": 37, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 1 }];
@@ -87,6 +87,9 @@ function appraiseUpgrade(s, b) {
     const lv = Math.floor(s[BUILDING_LV.start + b] / s[BUILDING_COUNT.start + b]) + 1;
     return table[b][lv];
 }
+function _upgrade_building(s, b) {
+    s[BUILDING_LV.start + b] += 1;
+}
 function upgradeBuilding(s, b, cost) {
     s.slice(RESOURCES.start, RESOURCES.end).forEach((_, i) => s[RESOURCES.start + i] -= cost[i]);
     s[BUILDING_LV.start + b] += 1;
@@ -110,6 +113,21 @@ function appraiseNewBuilding(s, b) {
     }
     const cost = table[b].slice(0, lv + 1).reduce((a, b) => a.map((x, i) => x + b[i]), [0, 0, 0, 0]);
     return [lv, cost];
+}
+function _new_building(s, b) {
+    let lv;
+    if (s[BUILDING_COUNT.start + b] === 0) {
+        lv = 1;
+    }
+    else {
+        lv = s[BUILDING_LV.start + b] / s[BUILDING_COUNT.start + b];
+        if (Number.isInteger(lv)) {
+            lv -= 1;
+        }
+        lv = Math.max(1, Math.floor(lv));
+    }
+    s[BUILDING_COUNT.start + b] += 1;
+    s[BUILDING_LV.start + b] += lv;
 }
 function buyNewBuilding(s, b, lv, cost = [0, 0, 0, 0]) {
     s.slice(RESOURCES.start, RESOURCES.end).forEach((_, i) => s[RESOURCES.start + i] -= cost[i]);
@@ -135,17 +153,17 @@ function advanceTicks(s, n) {
     s.slice(RESOURCES.start, RESOURCES.end).forEach((_, i) => s[RESOURCES.start + i] = Math.min(s[STORAGE_CAPS.start + i], s[RESOURCES.start + i] + gain[i]));
     s.slice(CUMULATIVE_RESOURCES.start, CUMULATIVE_RESOURCES.end).forEach((_, i) => s[CUMULATIVE_RESOURCES.start + i] += gain[i]);
 }
-function fmt_state(s, verbosity = 1) {
-    function getTrueBuildingLvls(count, totalLvl) {
-        let result = [];
-        while (count) {
-            const lvl = Math.floor(totalLvl / count);
-            result.push(lvl);
-            count -= 1;
-            totalLvl -= lvl;
-        }
-        return result;
+function getTrueBuildingLvls(count, totalLvl) {
+    let result = [];
+    while (count) {
+        const lvl = Math.floor(totalLvl / count);
+        result.push(lvl);
+        count -= 1;
+        totalLvl -= lvl;
     }
+    return result;
+}
+function fmt_state(s, verbosity = 1) {
     const buildingStats = buildings.map((_, i) => [s[BUILDING_LV.start + i], s[BUILDING_COUNT.start + i]]);
     const buildingsStr = buildingStats.map(([lvl, count], i) => lvl > 0 ? `${BUILDING_NAMES[i]} ${getTrueBuildingLvls(count, lvl).join(' ')}` : '').filter(x => x).join(' ');
     const resourcesStr = s.slice(RESOURCES.start, RESOURCES.end).map((a, i) => `${a.toFixed(0)}/${s[STORAGE_CAPS.start + i].toFixed(0)}`).join(' ');
