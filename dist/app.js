@@ -17,6 +17,11 @@ function Span(...children) {
     el.append(...children);
     return el;
 }
+function Div(...children) {
+    const el = document.createElement('div');
+    el.append(...children);
+    return el;
+}
 function h1(s) {
     const el = document.createElement('h1');
     el.innerText = s;
@@ -109,3 +114,5 @@ worker.onmessage = ev => {
     output_div_less.innerText = `iter ${iter} ` + fmt_path(short_path);
     output_div_more.innerText = `iter ${iter} ` + fmt_path(path);
 };
+// about
+document.body.appendChild(Div(h1('About'), p('Monte Carlo Tree Search optimising for cumulative (wood + iron) produced. Will drain your battery. Author makes no claim that this tool is optimal, functional, or ethical')));
