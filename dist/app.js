@@ -12,6 +12,12 @@ const worker = new Worker('../dist/factions.js', { type: 'module' });
 function Text(s) {
     return document.createTextNode(s);
 }
+function Button(text, onclick) {
+    const el = document.createElement('button');
+    el.innerText = text;
+    el.onclick = onclick;
+    return el;
+}
 function Span(...children) {
     const el = document.createElement('span');
     el.append(...children);
@@ -115,4 +121,9 @@ worker.onmessage = ev => {
     output_div_more.innerText = `iter ${iter} ` + fmt_path(path);
 };
 // about
-document.body.appendChild(Div(h1('About'), p('Monte Carlo Tree Search optimising for cumulative (wood + iron) produced. Will drain your battery. Author makes no claim that this tool is optimal, functional, or ethical')));
+const about_text = 'Monte Carlo Tree Search optimising for cumulative (wood + iron) produced. Will drain your battery. Author makes no claim that this tool is optimal, functional, or ethical';
+const about_p = p('[show]');
+about_p.onclick = ev => {
+    about_p.innerText = about_p.innerText === '[show]' ? about_text + ' [hide]' : '[show]';
+};
+document.body.appendChild(Div(h1('About'), about_p));
