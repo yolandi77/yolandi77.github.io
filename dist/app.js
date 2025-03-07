@@ -193,6 +193,9 @@ const about_text = `Monte Carlo Tree Search optimising for cumulative (wood + ir
 Will drain your battery.
 Author makes no claim that this tool is optimal, functional, or ethical.
 
+Bugs
++ Simulation can overshoot allotted ticks. This was a deliberate design compromise, but the overshoot is worse than I expected. Won't be fixed soon.
+
 Patch notes
 + Saves params to localstorage`;
 const about_p = p('[show]');
@@ -200,3 +203,4 @@ about_p.onclick = ev => {
     about_p.innerText = about_p.innerText === '[show]' ? about_text + ' [hide]' : '[show]';
 };
 document.body.appendChild(Div(h1('About'), about_p));
+// TODO: simulation overshooting ticks by over 1k. very bad.
