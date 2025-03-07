@@ -1,6 +1,6 @@
 import { newState, fmt_state, game, BUILDING_NAMES, _upgrade_building, getTrueBuildingLvls, BUILDING_LV, BUILDING_COUNT, _new_building, canBuildNewBuilding } from "./factions.js";
 import { range } from "./utils.js";
-const cfg = {
+const default_cfg = {
     hq_exponents: [1.5, 1.5, 1.5],
     building_exponents: [1.5, 1.5, 1.5],
     production_mults: [1, 1, 1, 1],
@@ -9,6 +9,10 @@ const cfg = {
     iters: 10000,
     s0: newState(),
 };
+const cfg = localStorage.getItem('cfg') ? JSON.parse(localStorage.getItem('cfg')) : default_cfg;
+function save_cfg() {
+    localStorage.setItem('cfg', JSON.stringify(cfg));
+}
 const worker = new Worker('../dist/factions.js', { type: 'module' });
 function Text(s) {
     return document.createTextNode(s);
@@ -67,7 +71,10 @@ function create_inputs(container, key) {
     if (Array.isArray(cfg[key])) {
         const inputs = cfg[key].map((x, i, xs) => Input({
             //@ts-ignore
-            oninput: ev => { xs[i] = parseFloat(ev.target.value); },
+            oninput: ev => {
+                xs[i] = parseFloat(ev.target.value);
+                save_cfg();
+            },
             //@ts-ignore
             defaultValue: x,
         }));
@@ -80,7 +87,10 @@ function create_inputs(container, key) {
         }
         div.appendChild(Input({
             //@ts-ignore
-            oninput: ev => cfg[key] = parseFloat(ev.target.value),
+            oninput: ev => {
+                cfg[key] = parseFloat(ev.target.value);
+                save_cfg();
+            },
             defaultValue: cfg[key],
         }));
     }
@@ -97,6 +107,7 @@ function state_builder() {
         _get_display(b).innerText = getTrueBuildingLvls(cfg.s0[BUILDING_COUNT.start + b], cfg.s0[BUILDING_LV.start + b]).join(' ');
         range(N_BUILDINGS).forEach(b => _get_new_button(b).disabled = !canBuildNewBuilding(cfg.s0));
         _get_upgrade_button(b).disabled = cfg.s0[BUILDING_COUNT.start + b] === 0;
+        save_cfg();
     }
     function _up(b) {
         _upgrade_building(cfg.s0, b);
@@ -115,6 +126,10 @@ function state_builder() {
     function _get_new_button(b) {
         return grid_container.children[1 + b * 4];
     }
+    function _reset_buildings() {
+        cfg.s0 = [...default_cfg.s0];
+        range(N_BUILDINGS).forEach(_render);
+    }
     const grid_container = Div();
     const N_BUILDINGS = 8;
     grid_container.style.display = 'grid';
@@ -123,7 +138,7 @@ function state_builder() {
     range(N_BUILDINGS).forEach(_render);
     //@ts-ignore
     grid_container.children[1].style.visibility = 'hidden';
-    return Div(h2('Starting Buildings'), grid_container);
+    return Div(h2('Starting Buildings'), grid_container, Button('reset buildings', _reset_buildings));
 }
 const input_container = document.createElement('div');
 input_container.appendChild(h1('Input'));
@@ -176,7 +191,10 @@ worker.onmessage = ev => {
 // about
 const about_text = `Monte Carlo Tree Search optimising for cumulative (wood + iron) produced.
 Will drain your battery.
-Author makes no claim that this tool is optimal, functional, or ethical.`;
+Author makes no claim that this tool is optimal, functional, or ethical.
+
+Patch notes
++ Saves params to localstorage`;
 const about_p = p('[show]');
 about_p.onclick = ev => {
     about_p.innerText = about_p.innerText === '[show]' ? about_text + ' [hide]' : '[show]';
