@@ -176,8 +176,8 @@ function toggle_more(more) {
     output_div_more.style.display = more ? 'block' : 'none';
 }
 toggle_more(false);
-function fmt_path(path) {
-    return `score ${game.score(path.at(-1).state)}\n` + path.map(node => fmt_state(node.state, 0)).join('\n');
+function fmt_path(path, verbosity) {
+    return `score ${game.score(path.at(-1).state)}\n` + path.map(node => fmt_state(node.state, verbosity)).join('\n');
 }
 worker.onmessage = ev => {
     if (ev.data.finished) {
@@ -185,8 +185,8 @@ worker.onmessage = ev => {
         return;
     }
     const { iter, path, short_path } = ev.data;
-    output_div_less.innerText = `iter ${iter} ` + fmt_path(short_path);
-    output_div_more.innerText = `iter ${iter} ` + fmt_path(path);
+    output_div_less.innerText = `iter ${iter} ` + fmt_path(short_path, 1);
+    output_div_more.innerText = `iter ${iter} ` + fmt_path(path, 1);
 };
 // about
 const about_text = `Monte Carlo Tree Search optimising for cumulative (wood + iron) produced.

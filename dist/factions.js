@@ -163,12 +163,13 @@ function getTrueBuildingLvls(count, totalLvl) {
     }
     return result;
 }
-function fmt_state(s, verbosity = 1) {
+function fmt_state(s, verbosity = 0) {
     const buildingStats = buildings.map((_, i) => [s[BUILDING_LV.start + i], s[BUILDING_COUNT.start + i]]);
     const buildingsStr = buildingStats.map(([lvl, count], i) => lvl > 0 ? `${BUILDING_NAMES[i]} ${getTrueBuildingLvls(count, lvl).join(' ')}` : '').filter(x => x).join(' ');
     const resourcesStr = s.slice(RESOURCES.start, RESOURCES.end).map((a, i) => `${a.toFixed(0)}/${s[STORAGE_CAPS.start + i].toFixed(0)}`).join(' ');
     return [
         `${buildingsStr}`,
+        `Tick:${s[TICK].toFixed(0)} ${buildingsStr}`,
         `Tick:${s[TICK].toFixed(0)} Resources: ${resourcesStr} Buildings: ${buildingsStr}`,
     ][verbosity];
 }
