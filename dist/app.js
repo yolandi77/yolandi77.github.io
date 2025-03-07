@@ -75,6 +75,7 @@ run_button.onclick = () => {
         cfg
     };
     worker.postMessage(msg);
+    run_button.disabled = true;
 };
 input_container.appendChild(run_button);
 document.body.appendChild(input_container);
@@ -100,6 +101,10 @@ function fmt_path(path) {
     return `score ${game.score(path.at(-1).state)}\n` + path.map(node => fmt_state(node.state, 0)).join('\n');
 }
 worker.onmessage = ev => {
+    if (ev.data.finished) {
+        run_button.disabled = false;
+        return;
+    }
     const { iter, path, short_path } = ev.data;
     output_div_less.innerText = `iter ${iter} ` + fmt_path(short_path);
     output_div_more.innerText = `iter ${iter} ` + fmt_path(path);

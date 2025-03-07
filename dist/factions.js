@@ -301,6 +301,9 @@ function run_worker() {
     const end_state = path.at(-1).state;
     const end_score = game.score(end_state);
     console.log('end score', end_score);
+    self.postMessage({
+        finished: true,
+    });
     return root;
 }
 self.addEventListener('message', (event) => {
