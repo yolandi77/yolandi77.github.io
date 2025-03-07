@@ -1,4 +1,4 @@
-export { MessageType, newState, unpack_action, fmt_action, fmt_state, game };
+export { newState, unpack_action, fmt_action, fmt_state, game };
 import { Mcts, MctsNode } from './mcts.js';
 import { random_choice, range } from './utils.js';
 const buildings = [{ "name": "HQ", "woodCost": 50, "ironCost": 50, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 10 }, { "name": "WoodCutter", "woodCost": 40, "ironCost": 0, "workerCost": 0.5, "woodStart": 1, "ironStart": 0, "workerStart": 8 }, { "name": "Mine", "woodCost": 40, "ironCost": 10, "workerCost": 0.5, "woodStart": 1, "ironStart": 2, "workerStart": 8 }, { "name": "Storage", "woodCost": 80, "ironCost": 20, "workerCost": 1, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Training Center", "woodCost": 100, "ironCost": 150, "workerCost": 8, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Barracks", "woodCost": 500, "ironCost": 500, "workerCost": 8, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Tavern", "woodCost": 150, "ironCost": 100, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "House", "woodCost": 500, "ironCost": 400, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 4 }, { "name": "Command Center", "woodCost": 500, "ironCost": 1000, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Guard Tower", "woodCost": 400, "ironCost": 900, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Town Hall", "woodCost": 1000, "ironCost": 600, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Mercenary Office", "woodCost": 400, "ironCost": 400, "workerCost": 10, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Arena", "woodCost": 600, "ironCost": 1000, "workerCost": 15, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Furnace", "woodCost": 150, "ironCost": 37, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 1 }, { "name": "Sawmill", "woodCost": 150, "ironCost": 37, "workerCost": 2, "woodStart": 1, "ironStart": 1, "workerStart": 1 }];
@@ -154,12 +154,6 @@ function fmt_state(s, verbosity = 1) {
         `Tick:${s[TICK].toFixed(0)} Resources: ${resourcesStr} Buildings: ${buildingsStr}`,
     ][verbosity];
 }
-var EActionType;
-(function (EActionType) {
-    EActionType[EActionType["BUILD"] = 0] = "BUILD";
-    EActionType[EActionType["UPGRADE"] = 1] = "UPGRADE";
-    EActionType[EActionType["SELL"] = 2] = "SELL";
-})(EActionType || (EActionType = {}));
 function action(atype, building) {
     return atype * buildings.length + building;
 }
@@ -174,19 +168,19 @@ function do_action(s, a) {
     const [atype, b] = unpack_action(a);
     let lv, cost, ticks;
     switch (atype) {
-        case EActionType.BUILD:
+        case 0 /* EActionType.BUILD */:
             [lv, cost] = appraiseNewBuilding(s, b);
             ticks = getTicksUntil(s, cost);
             advanceTicks(s, ticks);
             buyNewBuilding(s, b, lv, cost);
             break;
-        case EActionType.UPGRADE:
+        case 1 /* EActionType.UPGRADE */:
             cost = appraiseUpgrade(s, b);
             ticks = getTicksUntil(s, cost);
             advanceTicks(s, ticks);
             upgradeBuilding(s, b, cost);
             break;
-        case EActionType.SELL:
+        case 2 /* EActionType.SELL */:
             break;
     }
 }
@@ -204,17 +198,17 @@ function getActions(s) {
     }
     if (canBuildNewBuilding(s)) {
         if (s[BUILDING_LV.start + HQ] === first_tavern_lvl) {
-            return [action(EActionType.BUILD, TAVERN)];
+            return [action(0 /* EActionType.BUILD */, TAVERN)];
         }
         if (s[BUILDING_LV.start + HQ] === first_house_lvl) {
-            return [action(EActionType.BUILD, HOUSE)];
+            return [action(0 /* EActionType.BUILD */, HOUSE)];
         }
         for (const b of _buildings) {
             const [lv, cost] = appraiseNewBuilding(s, b);
             if (hasSufficientStorage(s, cost)) {
                 const ticks = getTicksUntil(s, cost);
                 if (ticks < action_max_tick_cost) {
-                    actions.push(action(EActionType.BUILD, b));
+                    actions.push(action(0 /* EActionType.BUILD */, b));
                 }
             }
         }
@@ -234,7 +228,7 @@ function getActions(s) {
             if (hasSufficientStorage(s, cost)) {
                 const ticks = getTicksUntil(s, cost);
                 if (ticks < action_max_tick_cost) {
-                    actions.push(action(EActionType.UPGRADE, b));
+                    actions.push(action(1 /* EActionType.UPGRADE */, b));
                 }
             }
         }
@@ -278,11 +272,6 @@ const mcts = new Mcts(game);
 console.log('worker loaded');
 let s0 = newState();
 let iters = 10000;
-var MessageType;
-(function (MessageType) {
-    MessageType[MessageType["RUN"] = 0] = "RUN";
-    MessageType[MessageType["CONFIGURE"] = 1] = "CONFIGURE";
-})(MessageType || (MessageType = {}));
 function run_worker() {
     const root = mcts.run({
         s0,
@@ -309,10 +298,10 @@ function run_worker() {
 self.addEventListener('message', (event) => {
     console.log('Received message in Worker:', event.data);
     let msg = event.data;
-    if (msg.type === MessageType.RUN) {
+    if (msg.type === 0 /* MessageType.RUN */) {
         run_worker();
     }
-    else if (msg.type === MessageType.CONFIGURE) {
+    else if (msg.type === 1 /* MessageType.CONFIGURE */) {
         const cfg = msg.cfg;
         gameHQCostScaling = cfg.hq_exponents;
         gameBuildingCostScaling = cfg.building_exponents;

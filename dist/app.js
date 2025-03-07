@@ -1,4 +1,4 @@
-import { MessageType, newState, fmt_state, game } from "./factions.js";
+import { newState, fmt_state, game } from "./factions.js";
 const cfg = {
     hq_exponents: [1.5, 1.5, 1.5],
     building_exponents: [1.5, 1.5, 1.5],
@@ -71,7 +71,7 @@ const run_button = document.createElement('button');
 run_button.innerText = 'Run';
 run_button.onclick = () => {
     const msg = {
-        type: MessageType.CONFIGURE,
+        type: 1 /* MessageType.CONFIGURE */,
         cfg
     };
     worker.postMessage(msg);
