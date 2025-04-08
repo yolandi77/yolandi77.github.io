@@ -20,7 +20,11 @@ var current_cfg_string
 function update() {
     const _value = el => parseInt(el.value)
     const _prod = el => _value(el.children[1]) * _value(el.children[2]);
-    const _fmt = el => `${_value(el.children[1])} x ${_value(el.children[2])}`;
+    const _fmt = (name, el) => {
+        const lv = _value(el.children[1])
+        const count = _value(el.children[2])
+        return count > 0 ? ` ${count}x${name}${lv}` : ''
+    }
     const soldier_building_levels = _prod(tc_input) + _prod(merc_input)
     const gt_bonus = 3 * _prod(gt_input)
     const arena_bonus = 3 * _prod(arena_input)
@@ -34,7 +38,7 @@ number of buildings    ${buildings_total}
 gt attack bonus        ${gt_bonus}%
 arena production bonus ${arena_bonus}%
 score ${score.toFixed(0)}`
-    current_cfg_string = `\nscore ${score.toFixed(0)} buildings ${buildings_total} TC${_fmt(tc_input)} Merc${_fmt(merc_input)} GT${_fmt(gt_input)} Arena${_fmt(arena_input)}`
+    current_cfg_string = `\nscore ${score.toFixed(0)}, total buildings ${buildings_total},${_fmt('TC', tc_input)}${_fmt('Merc', merc_input)}${_fmt('GT', gt_input)}${_fmt('Arena', arena_input)}`
 }
 const debounced_update = debounce(update, 300)
 
@@ -69,8 +73,10 @@ document.body.appendChild(container_div)
 attack_bonus_input.children[1].value = 50
 production_bonus_input.children[1].value = 50
 merc_input.children[1].value = 12
+merc_input.children[2].value = 10
 gt_input.children[1].value = 10
 arena_input.children[1].value = 9
+update()
 
 // utils
 function object_assign(dst, src) {
