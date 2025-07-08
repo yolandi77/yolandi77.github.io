@@ -48,6 +48,7 @@ class IntegerStat extends ReactiveVariable {
         bar_el.style.backgroundColor = this.color;
         const text_el = document.createElement('span');
         text_el.classList.add('statnumber');
+        text_el.title = this.constructor.name;
         const value_textnode = document.createTextNode('');
         const delta_textnode = document.createTextNode('');
         text_el.append(`${this.name.padEnd(4)}: `, value_textnode, ' + ', delta_textnode, '/tick');
@@ -102,7 +103,7 @@ class Draw extends IntegerStat {
 }
 class AttackProgress extends IntegerStat {
     constructor() {
-        super('prog', '#fc0');
+        super('ap  ', '#fc0');
     }
 }
 const IntegerStats = [
@@ -530,12 +531,14 @@ function Button(text, onclick) {
 }
 function FPSCounter() {
     const el = document.createElement('div');
-    let last_timestamp = 0;
-    let interval = 0;
-    let update_speed = 0.2;
+    let last_timestamp = Date.now();
+    let running_interval = 0;
+    let update_speed = 0.5;
     const update = () => {
-        interval = (1 - update_speed) * interval + update_speed * (Date.now() - last_timestamp);
-        el.innerText = `fps: ${Math.round(1000 / interval)}`;
+        const this_interval = Date.now() - last_timestamp;
+        update_speed = this_interval / (this_interval + 200);
+        running_interval = (1 - update_speed) * running_interval + update_speed * this_interval;
+        el.innerText = `fps: ${Math.round(1000 / running_interval)}`;
         last_timestamp = Date.now();
     };
     return {
@@ -578,11 +581,16 @@ function combat_test() {
     autotick_input.placeholder = 'autotick interval';
     autotick_input.oninput = debounce(() => {
         clearInterval(setinterval_handle);
-        setinterval_handle = setInterval(() => {
-            combat.tick();
-            fps_display.update();
-        }, parseInt(autotick_input.value));
+        const input_value = parseInt(autotick_input.value);
+        if (input_value > 0) {
+            setinterval_handle = setInterval(() => {
+                combat.tick();
+                fps_display.update();
+            }, input_value);
+        }
     }, 300);
     document.body.append(Button('tick', () => combat.tick()), Button('add hero', () => combat.add_hero(make_hero())), autotick_input, fps_display.el, combat.render());
+    combat.add_hero(make_hero());
+    combat.add_hero(make_hero());
 }
 combat_test();
