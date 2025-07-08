@@ -528,6 +528,21 @@ function Button(text, onclick) {
     el.onclick = onclick;
     return el;
 }
+function FPSCounter() {
+    const el = document.createElement('div');
+    let last_timestamp = 0;
+    let interval = 0;
+    let update_speed = 0.2;
+    const update = () => {
+        interval = (1 - update_speed) * interval + update_speed * (Date.now() - last_timestamp);
+        el.innerText = `fps: ${Math.round(1000 / interval)}`;
+        last_timestamp = Date.now();
+    };
+    return {
+        el,
+        update
+    };
+}
 function combat_test() {
     function make_hero() {
         const [name, id] = array_random(Object.entries(MS.mobs));
@@ -557,8 +572,7 @@ function combat_test() {
         card.add_effect(new GenericEffect(array_random(range(IntegerStats.length)), array_random([false, true]), is_delta, base_value));
     }
     const combat = new Combat();
-    let last_tick = Date.now();
-    let running_tick_interval = 0;
+    let fps_display = FPSCounter();
     let setinterval_handle;
     const autotick_input = document.createElement('input');
     autotick_input.placeholder = 'autotick interval';
@@ -566,12 +580,9 @@ function combat_test() {
         clearInterval(setinterval_handle);
         setinterval_handle = setInterval(() => {
             combat.tick();
-            running_tick_interval = 0.5 * running_tick_interval + 0.5 * (Date.now() - last_tick);
-            last_tick = Date.now();
-            fps_display.innerText = `fps: ${1000 / running_tick_interval}`;
+            fps_display.update();
         }, parseInt(autotick_input.value));
     }, 300);
-    const fps_display = document.createElement('div');
-    document.body.append(Button('tick', () => combat.tick()), Button('add hero', () => combat.add_hero(make_hero())), autotick_input, fps_display, combat.render());
+    document.body.append(Button('tick', () => combat.tick()), Button('add hero', () => combat.add_hero(make_hero())), autotick_input, fps_display.el, combat.render());
 }
 combat_test();
