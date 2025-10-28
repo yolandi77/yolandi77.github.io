@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>canvas</title>
+    <style>
+        body {
+            background-color: #222;
+        }
+        .c1 {
+            color: red;
+        }
+        .c2 {
+            color: orange;
+        }
+        .c3 {
+            color: yellow;
+        }
+        .c4 {
+            color: lime;
+        }
+        .c5 {
+            color: green;
+        }
+        .c6 {
+            color: cyan;
+        }
+        .c7 {
+            color: blue;
+        }
+        .c8 {
+            color: magenta;
+        }
+        .c9 {
+            color: white;
+        }
+
+    </style>
+</head>
+<body>
+</body>
+<script>
+
+const SPACE = ' '.charCodeAt(0)
+const TRANSPARENT = 0
+const TRANSPARENT_CHAR = String.fromCharCode(0)
+
+const RED = 1;
+const ORANGE = 2;
+const YELLOW = 3;
+const LIME = 4;
+const GREEN = 5;
+const CYAN = 6;
+const BLUE = 7;
+const MAGENTA = 8;
+const WHITE = 9;
+
+// colored ascii
+class ASCII {
+    constructor(w, h) {
+        this.w = w
+        this.h = h
+        this.text = new Uint8Array(this.w * this.h)
+        this.color = new Uint8Array(this.w * this.h)
+    }
+
+    static from_str(str, color = 0) {
+        str = String(str)
+        const lines = str.split('\n');
+        const w = lines[0].length
+        const h = lines.length;
+        console.assert(str.length === (w + 1) * h - 1, 'line lengths not uniform', lines)
+        const ascii = new ASCII(w, h)
+        const encoder = new TextEncoder()
+        for (let y=0; y<h; y++) {
+            ascii.text.set(encoder.encode(lines[y]), y*w)
+        }
+        ascii.color.fill(color)
+        return ascii
+    }
+
+    clone() {
+        const ascii = new ASCII(this.w, this.h)
+        ascii.text.set(this.text)
+        ascii.color.set(this.color)
+        return ascii
+    }
+
+    render() {
+        const w = this.w
+        const fragments = []
+        for (let y=0; y<this.h; y++) {
+            // run length encode colors
+            const rle = []
+            let prev_color = this.color[y*w]
+            let prev_x = 0
+            for (let x=0; x<this.w; x++) {
+                const color = this.color[y*w + x]
+                if (color !== prev_color) {
+                    rle.push(x - prev_x)
+                    prev_color = color
+                    prev_x = x
+                }
+            }
+            rle.push(this.w - prev_x)
+
+            // build span htmlstrings
+            let x = 0;
+            for (const n of rle) {
+                const color = this.color[y*w + x]
+                const text = String.fromCodePoint(...this.text.slice(y*w + x, y*w + x + n))
+                fragments.push(`<span class=c${color}>${text}</span>`)
+                x += n
+            }
+
+            fragments.push('\n')
+        }
+        return fragments.join('')
+    }
+
+
+    blit(other, x_offset = 0, y_offset = 0, keys = ['text', 'color']) {
+        const other_start_row = Math.max(0, -y_offset)
+        const other_end_row = Math.min(other.h, this.h - y_offset)
+
+        for (let y_ = other_start_row; y_ < other_end_row; y_++) {
+            const other_start = y_*other.w + Math.max(0, -x_offset)
+            const other_end = y_*other.w + Math.min(other.w, this.w - x_offset)
+            const this_start = (y_offset + y_)*this.w + Math.max(0, x_offset)
+            for (let i = 0; i < (other_end - other_start); i++) {
+                for (const key of keys) {
+                    if (other[key][other_start + i] !== TRANSPARENT) { 
+                        this[key][this_start + i] = other[key][other_start + i]
+                    }
+                }
+            }
+        }
+    }
+
+    // without transparency
+    _blit(other, x_offset = 0, y_offset = 0, keys = ['text', 'color']) {
+        const w = this.w
+        const w_ = other.w
+        const start_y_ = Math.max(0, -y_offset)
+        const end_y_ = Math.min(other.h, this.h - y_offset)
+
+        for (let y_ = start_y_; y_ < end_y_; y_++) {
+            const start_x_ = Math.max(0, -x_offset)
+            const end_x_ = Math.min(w_, w - x_offset)
+            for (const key of keys) {
+                const slice_ = other[key].slice(y_*w_ + start_x_, y_*w_ + end_x_)
+                this[key].set(slice_, (y_ + y_offset)*w + Math.max(0, x_offset))
+            }
+        }
+    }
+
+    get_idxs(char) {
+        const code = char.charCodeAt(0)
+        const idxs = []
+        for (let i=0; i<this.text.length; i++) {
+            if (this.text[i] === code) {
+                idxs.push(i)
+            }
+        }
+        return idxs
+    }
+
+    set_idxs(key, idxs, value) {
+        if (typeof value === 'string') {
+            value = value.charCodeAt(0)
+        }
+        const arr = this[key]
+        for (const i of idxs) {
+            arr[i] = value
+        }
+    }
+
+    replace(a, b) {
+        const idxs = this.get_idxs(a)
+        this.set_idxs('text', idxs, b)
+    }
+
+    color_by(char, color) {
+        const idxs = this.get_idxs(char)
+        this.set_idxs('color', idxs, color)
+    }
+
+    fill_rect(x, y, w, h, char = null, color = null) {
+        if (typeof char === 'string') {
+            char = char.charCodeAt(0)
+        }
+        const keys = ['text', 'color'].filter((_, i) => [char, color][i] !== null)
+        const start_col = Math.max(0, x);
+        const end_col = Math.min(this.w, x + w);
+        const start_row = Math.max(0, y);
+        const end_row = Math.min(this.h, y + h);
+
+        for (const key of keys) {
+            const arr = this[key];
+            const value = key === 'text' ? char : color
+            for (let row = start_row; row < end_row; row++) {
+                for (let col = start_col; col < end_col; col++) {
+                    arr[row * this.w + col] = value;
+                }
+            }
+        }
+    }
+
+    get_mouse_coords() {
+        // we probably want to map pixel coords to this coords
+    }
+}
+
+// an animation is just a list of bmps of constant size
+
+const animated_slime = (() => {
+    const slimes = [
+`
+.+++..
++o o+.
++++++.`,
+`
+.++++.
++ o o+
+++++++`,
+`
+..+++.
+.+o o+
+.+++++`,
+`
+.++++.
++o o +
+++++++`,
+    ].map(s => {
+        s = trim_newlines(s).replaceAll('.', TRANSPARENT_CHAR)
+        const ascii = ASCII.from_str(s)
+        const body = ascii.get_idxs('+')
+        const eye = ascii.get_idxs('o')
+        return {
+            ascii,
+            body,
+            eye,
+        }
+    })
+
+    return (body_char, body_color, eye_char, eye_color) => slimes.map(slime => {
+        const { ascii, body, eye } = slime
+        const ascii_ = ascii.clone()
+        ascii_.set_idxs('text', body, body_char)
+        ascii_.set_idxs('color', body, body_color)
+        ascii_.set_idxs('text', eye, eye_char)
+        ascii_.set_idxs('color', eye, eye_color)
+        return ascii_
+    })
+})()
+
+
+
+class Slime {
+    is_dead = false
+    is_dying = false
+    hp = 99
+    anim_frames
+    anim_ms_per_frame = 1000
+    t0
+    x
+    y
+    constructor() {
+        this.t0 = this.anim_ms_per_frame * Math.random()
+    }
+    lose_hp(t, dmg) {
+        this.hp -= dmg
+        if (!this.is_dying && !this.is_dead && this.hp <= 0) {
+            coin += 5
+            this.is_dying = true
+            const ascii = this.anim_frames[Math.floor((this.t0 + t) / this.anim_ms_per_frame) % 4]
+            const eye = [...String.fromCharCode(...ascii.text)].find(x => !['*',' ','\0'].includes(x))
+            ascii.replace(eye, 'x')
+            this.dying_ascii = ascii
+            this.death_time = t + 1000
+        }
+    }
+    draw(bg, t) {
+        if (this.is_dying) {
+            bg.blit(this.dying_ascii, this.x, this.y)
+            if (t > this.death_time) {
+                this.is_dead = true
+            }
+            return
+        }
+        const slime = this.anim_frames[Math.floor((this.t0 + t) / this.anim_ms_per_frame) % 4]
+        bg.blit(slime, this.x, this.y)
+        bg.blit(ASCII.from_str(String(this.hp), WHITE), this.x + 2, this.y - 1)
+    }
+    get w() {
+        return this.anim_frames[0].w
+    }
+    get h() {
+        return this.anim_frames[0].h
+    }
+}
+
+function rand_slime(hp) {
+    const slime = new Slime()
+    const eye = ['0', 'o', 'Q', '6', '.', '^', '@'][randint(7)]
+    slime.anim_frames = animated_slime('*', randint(1, 10), eye, randint(1, 10))
+    slime.x = randint(0, bg.w - slime.w)
+    slime.y = randint(1, bg.h - slime.h)
+    slime.hp = hp
+    return slime 
+}
+
+class Particle {
+    x
+    y
+    is_dead = false
+    _death_time
+    constructor(x, y, timestamp, lifespan, process, preprocess) {
+        this.process = process
+        this.preprocess = preprocess
+        this._death_time = timestamp + lifespan
+        this.x = x
+        this.y = y
+    }
+}
+
+function new_laser(timestamp, x, y, w, h, char, color, speed) {
+    var t = 0 // local time
+    function preprocess(timestamp, dt, bg) {
+        t += dt
+        this.x = x - w + Math.floor(speed * t / 1000)
+        if (this.x > bg.w) {
+            this.is_dead = true
+        }
+        bg.fill_rect(this.x, this.y, w, h, char, color)
+    }
+
+    function process(timestamp, dt, bg) {
+        bg.fill_rect(this.x, this.y, w, h, null, color)
+    }
+    const p = new Particle(x, y, timestamp, 5000, process, preprocess)
+    p.w = w
+    p.h = h
+    return p
+}
+
+function is_colliding(a, b) {
+    return (
+        a.x <= b.x + b.w && 
+        a.x + a.w >= b.x && 
+        a.y <= b.y + b.h && 
+        a.y + a.h >= b.y    
+    );
+}
+
+const el = document.createElement('pre')
+document.body.append(el)
+const bg = new ASCII(50, 20)
+bg.text.fill(SPACE)
+
+class Upgrade {
+    constructor(name) {
+        this.name = name
+        this.lvl = 0
+    }
+    cost() {
+        return (this.lvl + 1) ** 2
+    }
+    lvlup() {
+        coin -= this.cost()
+        this.lvl += 1
+    }
+}
+class Upgrades {
+    arr = []
+    draw(bg) {
+        let offset = 0
+        this.arr.forEach(u => {
+            const str = `${u.name}:${u.lvl}:${u.cost()}`
+            const ascii = ASCII.from_str(str, u.cost() > coin ? RED : LIME)
+            const prefix_len = str.split(':').slice(0, 2).join('').length + 1
+            ascii.fill_rect(prefix_len, 0, ascii.w - prefix_len, 1, null, YELLOW)
+            bg.blit(ascii, offset, bg.h - 1)
+            offset += ascii.w + 1
+        })
+    }
+    get(name) {
+        return this.arr.find(x => x.name === name)
+    }
+}
+var coin = 10
+var upgrades = new Upgrades()
+upgrades.arr = [
+    new Upgrade('lw'),
+    new Upgrade('lh'),
+    new Upgrade('lf'),
+    new Upgrade('sf'),
+    new Upgrade('sc'),
+    new Upgrade('sh'),
+]
+
+const input = {
+    buffer: '',
+    timestamp: 0,
+    process(bg) {
+        if (Date.now() - this.timestamp > 500) {
+            this.buffer = ''
+        }
+        const upgrade = upgrades.get(this.buffer)
+        if (upgrade && coin >= upgrade.cost()) {
+            upgrade.lvlup()
+            this.buffer = ''
+        }
+        bg.blit(ASCII.from_str(this.buffer, MAGENTA), 0, 1)
+    }
+}
+var slimes = []
+var damage_numbers = []
+var lasers = []
+var prev_timestamp = 0 // millis
+var slime_spawn_prog = 0
+var laser_prog = 0
+
+const loop = (timestamp) => {
+    const dt = timestamp - prev_timestamp
+    bg.text.fill(SPACE)
+
+    slime_spawn_prog += dt * Math.pow(1.1, upgrades.get('sf').lvl)
+    if (slime_spawn_prog > 2000 && slimes.length < upgrades.get('sc').lvl + 3) {
+        slimes.push(rand_slime(Math.max(1, 99 - upgrades.get('sh').lvl)))
+        slime_spawn_prog = 0
+    }
+    
+    laser_prog += dt * upgrades.get('lf').lvl
+    if (laser_prog > 999) {
+        const w = Math.floor(upgrades.get('lw').lvl / 2 + 2)
+        const h = Math.floor(upgrades.get('lh').lvl / 4 + 1)
+        const color = ['lf', 'lh', 'lw'].reduce((acc, x) => acc += upgrades.get(x).lvl, 0) % 9 + 1
+        lasers.push(new_laser(timestamp, 0, randint(0, bg.h), w, h, '~', color, 100))
+        laser_prog = 0
+    }
+
+    lasers.forEach(p => p.preprocess(timestamp, dt, bg))
+
+    slimes.forEach(slime => slime.draw(bg, timestamp))
+    slimes = slimes.filter(x => !x.is_dead)
+
+    damage_numbers.forEach(n => {
+        bg.blit(n.ascii, n.x, n.y)
+    })
+    damage_numbers = damage_numbers.filter(x => !x.is_dead)
+
+    lasers.forEach(p => p.process(timestamp, dt, bg))
+    lasers = lasers.filter(p => !p.is_dead)
+
+    lasers.forEach(p => slimes.forEach(s => {
+        if (is_colliding(p, s)) {
+            s.lose_hp(timestamp, 1)
+        }
+    }))
+
+    bg.blit(ASCII.from_str(coin, YELLOW))
+    upgrades.draw(bg)
+    input.process(bg)
+
+    el.innerHTML = bg.render()
+    prev_timestamp = timestamp
+
+    requestAnimationFrame(loop)
+};
+
+loop(0)
+
+document.onkeydown = (e) => {
+    if (e.key === 'l') laser_prog += 1000
+    input.buffer += e.key
+    input.timestamp = Date.now()
+}
+
+// UTILS
+function range(a, b = null) {
+    if (b === null) {
+        b = a
+        a = 0
+    }
+    return Array.from(Array(Math.max(0, b - a))).map((_, i) => a + i)
+}
+
+// object pool pattern
+// live -swap> dead
+
+// [a, b)
+function randint(a, b = null) {
+    if (b === null) {
+        b = a
+        a = 0
+    }
+    return a + Math.floor(Math.random() * (b - a));
+}
+
+function trim_newlines(str) {
+    return str.replace(/^\n+|\n+$/g, '')
+}
+
+function new_rng_stream(seed) {
+    const m = 0x100000000; // 2^32
+    const a = 1103515245;  // A good multiplier
+    const c = 12345;       // A good increment
+    let state = (seed >>> 0) % m;
+
+    const rand = () => {
+        state = (a * state + c) % m;
+        return state / m; // Normalize to a float between [0, 1)
+    };
+
+    const randint = (a, b = null) => {
+        if (b === null) {
+            b = a
+            a = 0
+        }
+        return a + Math.floor(rand() * (b - a));
+    }
+}
+
+// gameplay
+// each level: unique (slime types, slime difficulty, rewards)
+// elements: damage has an element. slimes resist their own element 
+// weapon types: aoe, single target
+</script>
+</html>
+
