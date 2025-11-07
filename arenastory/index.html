@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArenaStory</title>
+    <style>
+        body {
+            background-color: #222;
+            color: #fb2;
+        }
+    </style>
+</head>
+<body>
+</body>
+<script>
+/**
+    Arenascape
+
+    Tight coupling of UI and code seems reasonable here
+
+*/
+
+const [
+    STR,
+    DEX,
+    INT,
+    LUK
+] = range(4)
+const STAT_TO_STRING = [
+    'STR',
+    'DEX',
+    'INT',
+    'LUK',
+]
+const UNICODE_DICE = [
+  "⚀", // Die Face-1
+  "⚁", // Die Face-2
+  "⚂", // Die Face-3
+  "⚃", // Die Face-4
+  "⚄", // Die Face-5
+  "⚅"  // Die Face-6
+];
+
+const [
+    SELF,
+    OTHER
+] = range(2)
+
+class Card {
+    constructor(name, effect) {
+        this.name = name
+        this.effect = effect
+    }
+    str() {
+        return `${this.name}\n${this.effect.str()}`
+    }
+}
+class Deck {    
+    deck = []
+    constructor(deck) {
+        this.deck = deck
+    }
+    init() {
+        this.draw_pile = [...this.deck]
+        shuf(this.draw_pile)
+        this.discard_pile = []
+    }
+    /** returns card | null */
+    draw() {
+        if (this.draw_pile.length === 0 && this.discard_pile.length === 0) {
+            return null
+        }
+        if (this.draw_pile.length > 0) {
+            const card = this.draw_pile.pop()
+            this.discard_pile.push(card)
+            return card
+        } else {
+            this.reshuffle()
+            return this.draw()
+        }
+    }
+    reshuffle() {
+        shuf(this.discard_pile)
+        this.draw_pile = this.discard_pile
+        this.discard_pile = []
+    }
+    render() {
+        const container = Flex('row', {}, this.deck.map(card => {
+            let name_hovered = false
+            let tooltip_hovered = false
+            let tooltip
+            const _show_tooltip = e => {
+                tooltip.style.right = e.clientX > window.innerWidth / 2 ? 0 : undefined
+                tooltip.style.visibility = name_hovered || tooltip_hovered ? 'visible' : 'hidden'
+            } 
+            tooltip = Pre({
+                style: {
+                    visibility: 'hidden',
+                    position: 'absolute',
+                    margin: 0,
+                    backgroundColor: '#111',
+                },
+                text: card.effect.str(),
+                onmouseenter: e => {
+                    tooltip_hovered = true
+                    _show_tooltip(e)
+                },
+                onmouseleave: debounce(e => {
+                    tooltip_hovered = false
+                    _show_tooltip(e)
+                }, 0)
+            })
+            return Div({
+                style: {
+                    padding: '2px',
+                    backgroundColor: '#111',
+                },
+                text: card.name,
+                onmouseenter: e => {
+                    name_hovered = true;
+                    _show_tooltip(e)
+                },
+                onmouseleave: debounce(e => {
+                    name_hovered = false
+                    _show_tooltip(e)
+                }, 0)
+            }, [tooltip])
+        }))
+        return container
+    }
+}
+
+class Character {
+    constructor(name, stats, deck) {
+        this.name = name
+        this.stats = stats
+        this.deck = new Deck(deck)
+    }
+    init() {
+        this.hp = 10 * this.stats[STR]
+        this.deck.init()
+    }
+    render_stats() {
+        return this.stats.map((x, i) => `${STAT_TO_STRING[i]}:${x}`).join(' ')
+    }
+    render() {
+        return Div({}, [
+            El('h1', {
+                style: {
+                    margin: 0,
+                },
+                text: this.name,
+            }, []),
+            Div({ text: `HP:${this.hp}` }),
+            Div({ text: this.render_stats() }),
+            this.deck.render(),
+        ])
+    }
+}
+class Combat {
+    characters = []
+    turn_count = 1
+    _log = []
+    log(x) {
+        this._log.push(x)
+    }
+    init() {
+        this.characters.forEach(c => c.init())
+    }
+    take_turn(self, other) {
+        this.log(`Turn ${this.turn_count}`)
+        const card = self.deck.draw()
+        if (card === null) {
+            this.log(`${self.name} is empty handed`)
+            return
+        }
+        this.log(`${self.name} uses ${card.name}`)
+        const prev_hp = other.hp
+        card.effect.exec(self, other, this._log)
+        if (other.hp < prev_hp) {
+            this.log(`${other.name} hp: ${prev_hp} -> ${other.hp}`)
+        }
+        this.log('')
+        this.turn_count += 1
+    }
+    /** combat between 2 characters */
+    auto() {
+        this.init()
+        let i = 999
+        let char_idx = 0
+        while (i--) {
+            if (this.characters[char_idx].hp <= 0) {
+                this.log(`${this.characters[char_idx].name} died`)
+                break
+            }
+            this.take_turn(this.characters[char_idx], this.characters[1 - char_idx])
+            char_idx = 1 - char_idx
+        }
+    }
+}
+
+const card_effect_lib = (() => {
+    const TAB = '  '
+    const roll_proto = {
+        str(tabs = 0) {
+            return `${TAB.repeat(tabs)}🎲${this.target === OTHER ? 'Enemy' : ''}${STAT_TO_STRING[this.stat]}`
+        },
+        exec(self, other, log) {
+            const target = [self, other][this.target]
+            const result = Math.ceil(target.stats[this.stat] * Math.random())
+            // log.push(`${target.name} rolled ${result}`)
+            return result
+        },
+        times(n) {
+            this.n = n
+            return this
+        }
+    }
+    function Roll(target, stat) {
+        return Object.assign(Object.create(roll_proto), { target, stat })
+    }
+
+    const damage_proto = {
+        str(tabs = 0) {
+            return `${TAB.repeat(tabs)}Deal ${this.dmg.str()} damage`
+        },
+        exec(self, other, log) {
+            const dmg = this.dmg.exec(self, other, log)
+            log.push(`${self.name} hit ${other.name} for ${dmg}!`)
+            other.hp -= dmg
+        }
+    }
+    function Damage(dmg) {
+        return Object.assign(Object.create(damage_proto), { dmg: _num_helper(dmg) })
+    }
+
+    const if_proto = {
+        str(tabs = 0) {
+            return `${TAB.repeat(tabs)}If ${this.condition.str(0)}:\n${this.body.str(tabs+1)}`
+        },
+        exec(self, other, log) {
+            if (this.condition.exec(self, other, log)) {
+                return this.body.exec(self, other, log)
+            } else {
+                log.push(`${self.name} missed`)
+            }
+        }
+    }
+    function If(condition, body) {
+        return Object.assign(Object.create(if_proto), { condition, body })
+    }
+
+    const gt_proto = {
+        str() {
+            return `${this.a.str()} > ${this.b.str()}`
+        },
+        exec(self, other, log) {
+            return this.a.exec(self, other, log) > this.b.exec(self, other, log)
+        }
+    }
+    function GT(a, b) {
+        return Object.assign(Object.create(gt_proto), { a: _num_helper(a), b: _num_helper(b) })
+    }
+
+    const add_proto = {
+        str() {
+            return `${this.a.str()} + ${this.b.str()}`
+        },
+        exec(self, other, log) {
+            return this.a.exec(self, other, log) + this.b.exec(self, other, log)
+        }
+    }
+    function Add(a, b) {
+        return Object.assign(Object.create(add_proto), { a: _num_helper(a), b: _num_helper(b) })
+    }
+
+    const sum_proto = {
+        str(tabs = 0) {
+            return TAB.repeat(tabs) + this.args.map(x => x.str()).join(' + ')
+        },
+        exec(self, other, log) {
+            return this.args.reduce((acc, x) => acc + x.exec(self, other, log), 0)
+        }
+    }
+    function Sum(...args) {
+        return Object.assign(Object.create(sum_proto), { args: args.map(_num_helper) })
+    }
+
+    const mul_proto = {
+        str() {
+            return `${this.a.str()}x${this.b.str()}`
+        },
+        exec(self, other, log) {
+            return this.a.exec(self, other, log) * this.b.exec(self, other, log)
+        }
+    }
+    function Mul(a, b) {
+        return Object.assign(Object.create(mul_proto), { a: _num_helper(a), b: _num_helper(b) })
+    }
+
+    const repeat_proto = {
+        str(tabs = 0) {
+            return `${TAB.repeat(tabs)}${this.n.str()} times:\n${this.body.str(tabs+1)}`
+        },
+        exec(self, other, log) {
+            const repeats = this.n.exec(self, other, log)
+            for (let i=0; i<repeats; i++) {
+                this.body.exec(self, other, log)
+            }
+        }
+    }
+    function Repeat(n, body) {
+        return Object.assign(Object.create(repeat_proto), { n: _num_helper(n), body })
+    }
+
+    const num_proto = {
+        str() {
+            return String(this.n)
+        },
+        exec(self, other, log) {
+            return this.n
+        }
+    }
+    function Num(n) {
+        return Object.assign(Object.create(num_proto), { n })
+    }
+    function _num_helper(n) {
+        return n.exec ? n : Num(n)
+    }
+
+    const seq_proto = {
+        str(tabs = 0) {
+            return this.args.map(x => x.str(tabs)).join('\n')
+        },
+        exec(self, other, log) {
+            this.args.forEach(x => x.exec(self, other, log))
+        }
+    }
+    function Seq(...args) {
+        return Object.assign(Object.create(seq_proto), { args })
+    }
+
+    return { Roll, Damage, If, GT, Add, Mul, Repeat, Sum, Seq }
+})()
+
+const { Roll, Damage, If, GT, Add, Mul, Repeat, Sum, Seq } = card_effect_lib
+
+const CARDS = {
+    Strike: new Card('Strike', If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)), Damage(Roll(SELF, STR)))),
+    ClumsyStrike: new Card('ClumsyStrike', If(GT(Roll(SELF, LUK), Sum(Roll(OTHER, DEX), Roll(OTHER, LUK))), Damage(Roll(SELF, STR)))),
+    Lucky7: new Card('Lucky7', Repeat(2, If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)),Damage(Roll(SELF, LUK))))),
+    Fell: new Card('Fell', If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)), Damage(Mul(2, Roll(SELF, STR))))),
+    SavageBlow: new Card('SavageBlow', If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)), Repeat(6, Damage(Sum(Roll(SELF, STR), Roll(SELF, DEX), Roll(SELF, LUK)))))),
+    Lucky77: new Card('Lucky77', Repeat(Roll(SELF, LUK), If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)), Damage(Roll(SELF, LUK))))),
+    MorningStar: new Card('MorningStar', If(GT(Roll(SELF, LUK), Roll(OTHER, LUK)), Damage(Mul(2, Roll(SELF, STR))))),
+    ThreeSnails: new Card('ThreeSnails', Damage(10)),
+    Lightbringer: new Card('Lightbringer', Seq(Damage(Roll(SELF, STR)), Damage(Roll(SELF, DEX)), Damage(Roll(SELF, LUK)))),
+    Butterfly: new Card('Butterfly', If(GT(Roll(SELF, DEX), Roll(OTHER, DEX)), Damage(Sum(Roll(SELF, DEX), Roll(SELF, DEX))))),
+}
+
+function loot_screen(deck, loot, onloot) {
+    var card_buttons
+    var skip_button
+    var container
+
+    card_buttons = loot.map(card => Button({
+        style: {
+            textAlign: 'left',
+            whiteSpace: 'pre',
+        },
+        text: card.str(),
+        onclick: () => {
+            deck.push(card)
+            card_buttons.forEach(b => b.disabled = true)
+            container.remove()
+            onloot()
+        }
+    }))
+    skip_button = Button({ text: 'skip', onclick: () => container.remove() })
+    container = Flex('column', {}, [
+        El('h', { text: 'Loot' }, []),
+        Flex('row', {}, card_buttons),
+        skip_button
+    ])
+    return container
+}
+
+
+
+
+function test1() {
+    const a = new Character()
+    a.name = 'ass'
+    a.stats = [
+        15,
+        20,
+        10,
+        4
+    ]
+    a.deck = new Deck()
+    a.deck.deck = [CARDS.Lucky77, CARDS.SavageBlow]
+
+    const b = new Character()
+    b.name = 'butt'
+    b.stats = [
+        20,
+        10,
+        5,
+        6
+    ]
+    b.deck = new Deck()
+    b.deck.deck = []
+
+    const combat = new Combat()
+    combat.characters = [a, b]
+    combat.init()
+    combat.auto()
+    // combat._log.map(x => console.log(x))
+    // Object.values(CARDS).map(c => console.log(`${c.name}\n` + c.effect.str()))
+
+    var screen = loot_screen(a.deck.deck, [CARDS.Strike, CARDS.Lucky7, CARDS.ThreeSnails])
+    // root.append(screen)
+    root.append(a.deck.render())
+    root.append(a.render())
+}
+
+
+
+class Mob {
+    constructor(char, exp, greet, bye, loot) {
+        this.char = char
+        this.exp = exp
+        this.greet = greet
+        this.bye = bye
+        this.loot = loot
+    }
+}
+
+var areas = {
+    'Gloucester Street': {
+        mobs: [
+            new Mob(
+                new Character('Crook', [3, 2, 0, 3], [CARDS.Strike, CARDS.ClumsyStrike]),
+                1,
+                'u from around here ?',
+                '..just a prank bro',
+                [CARDS.ClumsyStrike],
+            ),
+            new Mob(
+                new Character('Bum', [4, 1, 0, 1], [CARDS.Strike, CARDS.ClumsyStrike]),
+                1,
+                'bum a dart ?',
+                'prick',
+                [CARDS.ClumsyStrike],
+            ),
+            new Mob(
+                new Character('Thug', [6, 3, 0, 2], [CARDS.Strike, CARDS.Strike, CARDS.Strike, CARDS.Lucky7]),
+                2,
+                'oi, wanna fite ?',
+                'u got hands',
+                [CARDS.Lucky7, CARDS.ClumsyStrike, CARDS.ClumsyStrike],
+            ),
+            new Mob(
+                new Character('Pastor', [5, 4, 0, 1], [CARDS.Strike, CARDS.Strike, CARDS.Strike, CARDS.MorningStar]),
+                2,
+                'For we wrestle not against flesh and blood, but against principalities, against powers, ',
+                'against the rulers of the darkness of this world, against spiritual wickedness in high places...',
+                [CARDS.MorningStar, CARDS.ClumsyStrike, CARDS.ClumsyStrike],
+            ),
+        ]
+    },
+    'grippy sock jail': {
+        mobs: [
+            new Mob(
+                new Character('Psycho Killer', [6, 10, 0, 5], [CARDS.Strike, CARDS.Strike, CARDS.Butterfly]),
+                3,
+                "qu'est-ce que c'est ?",
+                'run run away',
+                [CARDS.Butterfly],
+            ),
+            new Mob(
+                new Character('Incandescent Adolescent', [7, 7, 0, 7], [CARDS.Strike, CARDS.Butterfly]),
+                4,
+                "Said she wasn't going but she went still",
+                "Likes her gentlemen not to be gentle",
+                [CARDS.ThreeSnails, CARDS.Butterfly],
+            ),
+            new Mob(
+                new Character('Hoco', [5, 6, 0, 10], [CARDS.Strike, CARDS.Lucky7]),
+                2,
+                'can i borrow money',
+                'lol',
+                [CARDS.Lucky7],
+            ),
+        ]
+    },
+    'Schism': {
+        mobs: [
+            new Mob(
+                new Character('Butcher', [20, 5, 0, 6], [CARDS.Fell]),
+                7,
+                'so much meat, so little time',
+                'cut off in me prime..',
+                [CARDS.Fell],
+            ),
+            new Mob(
+                new Character('23 Savage', [13, 13, 0, 13], [CARDS.Strike, CARDS.Lucky7, CARDS.Strike, CARDS.Strike, CARDS.Lucky7, CARDS.SavageBlow]),
+                10,
+                'how many pray that you flop ? (a lot)',
+                'how many lawyers you got ? (a lot)',
+                [CARDS.SavageBlow, CARDS.Lucky7, CARDS.Lucky7],
+            ),
+            new Mob(
+                new Character('Swordsman', [20, 30, 0, 15], [CARDS.Lightbringer, CARDS.Butterfly, CARDS.Lucky7]),
+                10,
+                'The Way of the warrior is resolute acceptance of death',
+                'Never stray from the way',
+                [CARDS.Lightbringer, CARDS.Butterfly, CARDS.Lucky7],
+            ),
+        ]
+    },
+    'Hell': {
+        mobs: [
+            new Mob(
+                new Character('Lucifer', [66, 66, 66, 66], [CARDS.Lightbringer, CARDS.MorningStar]),
+                66,
+                "And I'll never go home again",
+                'Favourite friend',
+                [CARDS.Lucky77, CARDS.Lightbringer, CARDS.MorningStar],
+            ),
+        ]
+    }
+}
+
+var player = new Character('you', [2, 2, 2, 2], [CARDS.Strike])
+var area_list = Flex('column', {}, Object.keys(areas).map(area_name => Button({
+    style: {
+        color: '#fff',
+        backgroundColor: '#111',
+    },
+    text: area_name,
+    onclick: () => go_to_area(area_name),
+}, [])))
+var center_div
+var title_div
+var exp_div
+var body_div
+var root = Flex('row', {}, [
+    area_list,
+    center_div = Div({ style: { flexGrow: 1 } }, [
+        Flex('row', {}, [
+            exp_div = Div(),
+            ...STAT_TO_STRING.map((name, i) => Button( { text: `praff ${name}`, onclick: () => level_up(i) }))
+        ]),
+        title_div = Div(),
+        body_div = Div(),
+    ]),
+])
+
+var player_exp = 0
+function gain_exp(n) {
+    player_exp += n
+    exp_div.innerText = `exp: ${player_exp} lvl cost: ${level_up_cost}`
+}
+var level_up_cost = 1
+gain_exp(0)
+function level_up(stat) {
+    if (player_exp >= level_up_cost) {
+        gain_exp(-level_up_cost)
+        player.stats[stat] += 1
+        level_up_cost += 1
+        body_div.innerHTML = ''
+        player.init()
+        body_div.append(player.render())
+    }
+}
+
+function go_to_area(area_name) {
+    title_div.innerHTML = ''
+    body_div.innerHTML = ''
+    title_div.append(
+        Center(El('h', { text: area_name }, [])),
+        Center(Button({ 
+            id: 'fight-button',
+            style: {
+                margin: '2px',
+            },
+            text: 'Fight',
+            onclick: () => fight(area_name)
+        }, []))
+    )
+}
+document.body.onkeydown = e => {
+    if (e.key === 'f') {
+        document.getElementById('fight-button').onclick()
+    }
+}
+function fight(area_name) {
+    const mob = array_random_choice(areas[area_name].mobs)
+    const combat = new Combat()
+    combat.characters = [player, mob.char]
+    combat.init()
+
+    const mob_div = mob.char.render()
+    const player_div = player.render()
+    const quote_div = Div({
+        style: {
+            textAlign: 'center'
+        },
+        text: mob.greet
+    })
+    combat.auto()
+    let combat_log = Pre({
+            style: {
+                textAlign: 'center',
+            },
+            text: combat._log.join('\n')
+        })
+    let loot_div = Div()
+    let bye_div = Div({
+            style: {
+                textAlign: 'center'
+            },
+        })
+    if (mob.char.hp <= 0) {
+        gain_exp(mob.exp)
+        bye_div.innerText = mob.bye
+        const loots = []
+        for (const loot of mob.loot) {
+            if (Math.random() < 0.3) {
+                loots.push(loot)
+            }
+        }
+        if (loots.length > 0) {
+            loot_div.append(Center(loot_screen(player.deck.deck, loots, () => player_div.replaceWith(player.render()))))
+        }
+    }
+    body_div.innerHTML = ''
+    body_div.append(
+        Flex('row', { style: { justifyContent: 'space-between' } }, [
+            player_div,
+            mob_div,
+        ]),
+        quote_div,
+        loot_div,
+        combat_log,
+        bye_div,
+    )
+}
+
+document.body.append(root)
+
+// DOM UTILS
+function object_assign(dst, src) {
+    for (const k in src) {
+        const v = src[k];
+        typeof v === 'object' ? object_assign(dst[k], v) : dst[k] = v;
+    }
+}
+function El(tag_name, props, children) {
+    const el = document.createElement(tag_name);
+    if ('class' in props) {
+        props.className = props.class;
+        delete props.class;
+    }
+    if ('text' in props) {
+        props.innerText = props.text;
+        delete props.text;
+    }
+    object_assign(el, props);
+    for (const c of children) {
+        el.append(c);
+    }
+    return el;
+}
+function Div(props = {}, children = []) {
+    return El('div', props, children);
+}
+function Pre(props = {}, children = []) {
+    return El('pre', props, children);
+}
+function Code(props = {}, children = []) {
+    return El('code', props, children);
+}
+function Img(props = {}, children = []) {
+    return El('img', props, children);
+}
+function Button(props = {}, children = []) {
+    return El('button', props, children);
+}
+function Input(props = {}, children = []) {
+    return El('input', props, children);
+}
+function Text(txt) {
+    return document.createTextNode(txt)
+}
+function Flex(flexDirection, props = {}, children = []) {
+    const style = Object.assign({
+        display: 'flex',
+        flexDirection
+    }, props.style)
+    props.style = style
+    return El('Div', props, children)
+}
+function Center(div) {
+    return El('Div', {
+        style: {
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+        }
+    }, [div])
+}
+function debounce(func, wait = 300) {
+    let timeoutId = null;
+    return (...args) => { 
+        clearTimeout(timeoutId)
+        timeoutId = setTimeout(() => func(...args), wait);
+    }
+}
+// more utils
+function range(start, stop = undefined, step = 1) {
+    if (stop === undefined) {
+        stop = start
+        start = 0
+    }
+    return Array.from({ length: (stop - start) / step }, (_, i) => start + i * step);
+}
+/** in place */
+function shuf(xs) {
+    let b = xs.length;
+    while (b > 1) {
+        const a = Math.floor(Math.random() * b);
+        b--;
+        [xs[b], xs[a]] = [xs[a], xs[b]];
+    }
+}
+function array_random_choice(xs) {
+    return xs[Math.floor(xs.length * Math.random())]
+}
+</script>
+</html>

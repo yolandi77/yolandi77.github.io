@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypertext Grifter</title>
+    <style>
+        body {
+            background-color: #222;
+            color: aliceblue;
+        }
+        .card {
+            text-align: center;
+            background-color: rgba(149, 192, 255, 0.8);
+            border: 1px solid blue;
+            width: 6rem;
+            height: 8rem;
+            font-family: monospace;
+        }
+        .effectscontainer {
+            background-color: #222;
+            margin: 0.2rem;
+        }
+        .statcontainer {
+            position: relative;
+        }
+        .statbar {
+            position: absolute;
+            height: 100%;
+            left: 0;
+        }
+        .statnumber {
+            position: relative; /* give this a z-index */
+            font-family: monospace;
+            white-space: pre;
+        }
+        .pilescontainer {
+            display: flex;
+            flex-direction: row;
+            background-color: green;
+            width: 100%;
+            height: 8rem;
+        }
+        .pile {
+            display: flex;
+        }
+        .drawpile {
+            width: 80%;
+            height: 100%;
+            background-color: blueviolet;
+        }
+        .drawpile .card:not(:first-child) {
+            margin-left: -2rem;
+        }
+        .discardpile {
+            margin-right: 0;
+            flex-direction: row-reverse;
+            background-color: rgba(255, 0, 0, 0.3);
+            width: 20%;
+            height: 100%;
+        }
+        .discardpile .card:not(:first-child) {
+            margin-right: -5.5rem;
+        }
+
+        .hero {
+            background-color: rgba(255, 241, 47, 0.6);
+            border: 1px solid rgb(255, 0, 0);
+        }
+        .heroname {
+            color: black;
+        }
+        .dead {
+            filter: sepia();
+        }
+        .dmgtextpositioner {
+            position: relative;
+        }
+        .dmgtextcontainer {
+            position: absolute;
+            bottom: 0;
+        }
+        .dmgtext {
+            position: relative; /* zindex context */
+            pointer-events: none;
+
+            color: rgb(255, 208, 0);
+            text-shadow:
+                0 0 2px black,
+                2px 2px 0 black;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 2rem;
+            height: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <script src="main.js" type="module"></script>
+</body>
+</html>
+
+    
