@@ -4068,7 +4068,7 @@ void main() {
     fragColor = vec4(vColor.rgb, vColor.a * alpha);
 }
 
-    `}),rc=new bh(Rn,s_,Ii);function Bs(i){return Math.random()*i|0}function a_(i){return Array.from(Array(i),(t,e)=>e)}const o_=new Yl,Bn=o_.load("/public/tilemap.png",()=>{Bn.needsUpdate=!0});Bn.wrapS=He;Bn.wrapT=He;Bn.magFilter=ae;Bn.minFilter=ae;Bn.colorSpace=Ve;Bn.flipY=!1;const sc=new Uint16Array(wn*wn),Ni=new $r(sc,wn,wn,Zr,wi);Ni.magFilter=ae;Ni.minFilter=ae;Ni.internalFormat="R16UI";Ni.needsUpdate=!0;const ac=new nn({glslVersion:Gr,uniforms:{u_hovered_tile_id:{value:-1},u_light_dir:{value:new I(.3,.4,.9).normalize()},u_map_data:{value:Ni},u_tile_atlas:{value:Bn}},vertexShader:`
+    `}),rc=new bh(Rn,s_,Ii);function Bs(i){return Math.random()*i|0}function a_(i){return Array.from(Array(i),(t,e)=>e)}const o_=new Yl,Bn=o_.load("tilemap.png",()=>{Bn.needsUpdate=!0});Bn.wrapS=He;Bn.wrapT=He;Bn.magFilter=ae;Bn.minFilter=ae;Bn.colorSpace=Ve;Bn.flipY=!1;const sc=new Uint16Array(wn*wn),Ni=new $r(sc,wn,wn,Zr,wi);Ni.magFilter=ae;Ni.minFilter=ae;Ni.internalFormat="R16UI";Ni.needsUpdate=!0;const ac=new nn({glslVersion:Gr,uniforms:{u_hovered_tile_id:{value:-1},u_light_dir:{value:new I(.3,.4,.9).normalize()},u_map_data:{value:Ni},u_tile_atlas:{value:Bn}},vertexShader:`
 // in vec3 position; // injected
 
 // uniform mat4 modelMatrix; // injected
